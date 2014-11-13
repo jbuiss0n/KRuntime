@@ -77,7 +77,7 @@ namespace Microsoft.Framework.PackageManager.Packing
             // Generate .cmd files
             GenerateBatchFiles();
 
-            // Generate .sh files
+            // Generate executables (bash scripts without .sh extension) for *nix
             GenerateBashScripts();
         }
 
@@ -152,7 +152,7 @@ export SET KRE_APPBASE=""$DIR/{0}""
                         AppRootName, Runtimes.First().Name);
                 }
 
-                var scriptPath = Path.Combine(OutputPath, commandName + ".sh");
+                var scriptPath = Path.Combine(OutputPath, commandName);
                 File.WriteAllText(scriptPath,
                     string.Format(template, relativeAppBase, klrFolder, commandName).Replace("\r\n", "\n"));
                 if (PlatformHelper.IsMono)

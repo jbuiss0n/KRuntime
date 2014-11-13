@@ -807,7 +807,7 @@ export SET KRE_APPBASE=""$DIR/approot/src/{0}""
   'packages': {}
 }";
             var expectedOutputStructure = @"{
-  '.': ['run.cmd', 'run.sh', 'kestrel.cmd', 'kestrel.sh'],
+  '.': ['run.cmd', 'run', 'kestrel.cmd', 'kestrel'],
   'approot': {
     'global.json': '',
     'src': {
@@ -864,9 +864,9 @@ export SET KRE_APPBASE=""$DIR/approot/src/{0}""
 }")
                     .WithFileContents("run.cmd", string.Format(BatchFileTemplate, string.Empty, testEnv.ProjectName, "run"))
                     .WithFileContents("kestrel.cmd", string.Format(BatchFileTemplate, string.Empty, testEnv.ProjectName, "kestrel"))
-                    .WithFileContents("run.sh",
+                    .WithFileContents("run",
                         string.Format(BashScriptTemplate, testEnv.ProjectName, string.Empty, "run").Replace("\r\n", "\n"))
-                    .WithFileContents("kestrel.sh",
+                    .WithFileContents("kestrel",
                         string.Format(BashScriptTemplate, testEnv.ProjectName, string.Empty, "kestrel").Replace("\r\n", "\n"));
 
                 Assert.True(expectedOutputDir.MatchDirectoryOnDisk(testEnv.PackOutputDirPath,
@@ -886,7 +886,7 @@ export SET KRE_APPBASE=""$DIR/approot/src/{0}""
   'packages': {}
 }";
             var expectedOutputStructure = @"{
-  '.': ['run.cmd', 'run.sh', 'kestrel.cmd', 'kestrel.sh'],
+  '.': ['run.cmd', 'run', 'kestrel.cmd', 'kestrel'],
   'approot': {
     'global.json': '',
     'src': {
@@ -958,9 +958,9 @@ export SET KRE_APPBASE=""$DIR/approot/src/{0}""
 }")
                     .WithFileContents("run.cmd", string.Format(BatchFileTemplate, batchFileBinPath, testEnv.ProjectName, "run"))
                     .WithFileContents("kestrel.cmd", string.Format(BatchFileTemplate, batchFileBinPath, testEnv.ProjectName, "kestrel"))
-                    .WithFileContents("run.sh",
+                    .WithFileContents("run",
                         string.Format(BashScriptTemplate, testEnv.ProjectName, bashScriptBinPath, "run").Replace("\r\n", "\n"))
-                    .WithFileContents("kestrel.sh",
+                    .WithFileContents("kestrel",
                         string.Format(BashScriptTemplate, testEnv.ProjectName, bashScriptBinPath, "kestrel").Replace("\r\n", "\n"))
                     .WithSubDir(Path.Combine("approot", "packages", kreName), runtimeSubDir);
 
