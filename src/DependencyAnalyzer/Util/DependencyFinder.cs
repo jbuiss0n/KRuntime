@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Open Technologies, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,35 +12,35 @@ namespace DependencyAnalyzer.Util
 {
     public class DependencyFinder
     {
-        private readonly ICache                  _cache;
-        private readonly ICacheContextAccessor   _accessor;
-        private readonly IApplicationEnvironment _environment;
-        private readonly string                  _assemblyFolder;
+        private const string LibraryTypeProject = "Project";
+
+        private readonly string                _appbasePath;
+        private readonly string                _assemblyFolder;
+        private readonly ICache                _cache;
+        private readonly ICacheContextAccessor _accessor;
 
         public DependencyFinder(ICacheContextAccessor cacheContextAccessor, ICache cache, IApplicationEnvironment environment, string assemblyFolder)
         {
             _accessor = cacheContextAccessor;
             _cache = cache;
-            _environment = environment;
             _assemblyFolder = assemblyFolder;
+            _appbasePath = environment.ApplicationBasePath;
         }
 
-        public HashSet<string> GetContractDependencies(string assemblyName)
+        public HashSet<string> GetContractDependencies(string projectName)
         {
-            var used = new HashSet<string>();
+            var usedAssemblies = new HashSet<string>();
 
-            var dir = Path.GetDirectoryName(_environment.ApplicationBasePath);
-
-            var path = Path.Combine(dir, assemblyName);
+            var projectFolder = Path.Combine(_appbasePath, projectName);
 
             // TODO: hardcoded?
             var framework = VersionUtility.ParseFrameworkName("aspnetcore50");
 
             var hostContext = new ApplicationHostContext(
                                 serviceProvider: null,
-                                projectDirectory: path,
+                                projectDirectory: projectFolder,
                                 packagesDirectory: null,
-                                configuration: "Debug",
+                                configuration: "Debug",     // TODO: hardcoded?
                                 targetFramework: framework,
                                 cache: _cache,
                                 cacheContextAccessor: _accessor,
@@ -47,23 +48,28 @@ namespace DependencyAnalyzer.Util
 
             hostContext.DependencyWalker.Walk(hostContext.Project.Name, hostContext.Project.Version, framework);
 
-            var manager = (ILibraryManager)hostContext.ServiceProvider.GetService(typeof(ILibraryManager));
+            var libManager = (ILibraryManager)hostContext.ServiceProvider.GetService(typeof(ILibraryManager));
 
-            foreach (var library in manager.GetLibraries())
+            foreach (var library in libManager.GetLibraries())
             {
+                var isProject = string.Equals(LibraryTypeProject, library.Type, StringComparison.OrdinalIgnoreCase);
+
                 foreach (var loadableAssembly in library.LoadableAssemblies)
                 {
-                    used.Add(loadableAssembly.Name);
+                    if (!isProject || !string.Equals(library.Name, loadableAssembly.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        usedAssemblies.Add(loadableAssembly.Name);
+                    }
 
                     PackageAssembly assembly;
                     if (hostContext.NuGetDependencyProvider.PackageAssemblyLookup.TryGetValue(loadableAssembly.Name, out assembly))
                     {
-                        used.AddRange(WalkAll(assembly.Path));
+                        usedAssemblies.AddRange(WalkAll(assembly.Path));
                     }
                 }
             }
 
-            return used;
+            return usedAssemblies;
         }
 
         private IList<string> WalkAll(string rootPath)

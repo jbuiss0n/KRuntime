@@ -33,6 +33,7 @@ namespace DependencyAnalyzer.Commands
 
             var finder = new DependencyFinder(accessor, cache, _environment, _assemblyFolder);
 
+            // TODO: accept project other than klr.core45.managed, for example, klr.net45.managed?
             var tpa = finder.GetContractDependencies("klr.core45.managed");
 
             using (var output = SafeTextWriter.CreateOutput(_outputFile))

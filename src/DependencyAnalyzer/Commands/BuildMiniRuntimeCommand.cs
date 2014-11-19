@@ -11,8 +11,9 @@ namespace DependencyAnalyzer.Commands
 {
     public class BuildMiniRuntimeCommand
     {
-        private readonly IApplicationEnvironment _environment;
+        private const string KeyRuntime = "Runtime";
 
+        private readonly IApplicationEnvironment _environment;
         private readonly IEnumerable<string> _runtimeProjects;
         private readonly IEnumerable<string> _essentialProjects;
         private readonly string _assemblyFolder;
@@ -22,6 +23,7 @@ namespace DependencyAnalyzer.Commands
         {
             _environment = env;
 
+            // TODO: Unhard coded this?
             _runtimeProjects = new[] {
                 "Microsoft.Framework.Runtime.Roslyn",
                 "Microsoft.Framework.ApplicationHost",
@@ -29,6 +31,7 @@ namespace DependencyAnalyzer.Commands
                 "klr.core45.managed"
             };
 
+            // TODO: Unhard coded this?
             _essentialProjects = new[]
             {
                 "Microsoft.Framework.DesignTimeHost",
@@ -48,12 +51,11 @@ namespace DependencyAnalyzer.Commands
 
             var dependencies = new Dictionary<string, HashSet<string>>();
 
-            const string keyRuntime = "Runtime";
-            dependencies[keyRuntime] = new HashSet<string>();
+            dependencies[KeyRuntime] = new HashSet<string>();
 
             foreach (var name in _runtimeProjects)
             {
-                dependencies[keyRuntime].AddRange(finder.GetContractDependencies(name));
+                dependencies[KeyRuntime].AddRange(finder.GetContractDependencies(name));
             }
 
             foreach (var name in _essentialProjects)
@@ -63,7 +65,7 @@ namespace DependencyAnalyzer.Commands
 
             foreach (var pair in dependencies.Skip(1))
             {
-                pair.Value.ExceptWith(dependencies[keyRuntime]);
+                pair.Value.ExceptWith(dependencies[KeyRuntime]);
             }
 
             using (var output = SafeTextWriter.CreateOutput(_outputFile))
