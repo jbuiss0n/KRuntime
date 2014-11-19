@@ -24,6 +24,7 @@ namespace Microsoft.Framework.PackageManager
 
         public string CsProjectPath { get; set; }
         public string Configuration { get; set; }
+        public string MsBuildPath { get; set; }
         public Reports Reports { get; set; }
 
         public bool ExecuteCommand()
@@ -46,6 +47,7 @@ namespace Microsoft.Framework.PackageManager
             }
 
             CsProjectPath = Path.GetFullPath(CsProjectPath);
+            MsBuildPath = string.IsNullOrEmpty(MsBuildPath) ? GetDefaultMSBuildPath() : MsBuildPath;
 
             var rootDir = ProjectResolver.ResolveRootDirectory(Path.GetDirectoryName(CsProjectPath));
             var wrapRoot = Path.Combine(rootDir, "wrap");
@@ -68,9 +70,9 @@ namespace Microsoft.Framework.PackageManager
 
         private XDocument ResolveReferences()
         {
-            var msbuildExe = GetMSBuildExe();
-            if (string.IsNullOrEmpty(msbuildExe))
+            if (!File.Exists(MsBuildPath))
             {
+                Reports.Error.WriteLine(string.Format("Unable to locate {0}".Red().Bold(), MsBuildPath));
                 return null;
             }
 
@@ -106,7 +108,7 @@ namespace Microsoft.Framework.PackageManager
                 {
                     WorkingDirectory = Path.GetDirectoryName(projectFiles[i]),
                     UseShellExecute = false,
-                    FileName = msbuildExe,
+                    FileName = MsBuildPath,
                     Arguments = string.Format("\"{0}\" {1}",
                         _referenceResolverPath, string.Join(" ", properties)),
                     RedirectStandardOutput = true
@@ -137,7 +139,7 @@ namespace Microsoft.Framework.PackageManager
             return xDoc;
         }
 
-        private string GetMSBuildExe()
+        private string GetDefaultMSBuildPath()
         {
 #if ASPNET50
             var programFilesPath = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
@@ -154,13 +156,7 @@ namespace Microsoft.Framework.PackageManager
 #endif
             }
 
-            var msbuildExe = Path.Combine(programFilesPath, "MSBuild", "14.0", "Bin", "MSBuild.exe");
-            if (!File.Exists(msbuildExe))
-            {
-                Reports.Error.WriteLine(string.Format("Unable to locate {0}".Red().Bold(), msbuildExe));
-                return string.Empty;
-            }
-            return msbuildExe;
+            return Path.Combine(programFilesPath, "MSBuild", "14.0", "Bin", "MSBuild.exe");
         }
 
         private static void UpdateGlobalJson(string rootDir)
