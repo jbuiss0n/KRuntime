@@ -78,11 +78,7 @@ namespace Microsoft.Framework.PackageManager
             var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             Directory.CreateDirectory(tempDir);
             _referenceResolverPath = Path.Combine(tempDir, ReferenceResolverFileName);
-#if ASPNET50
-            var assembly = GetType().Assembly;
-#else
             var assembly = typeof(WrapCommand).GetTypeInfo().Assembly;
-#endif
             var embeddedResourceName = "compiler/resources/" + ReferenceResolverFileName;
             using (var stream = assembly.GetManifestResourceStream(embeddedResourceName))
             {
