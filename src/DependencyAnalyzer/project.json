@@ -1,0 +1,12 @@
+{
+    "dependencies": {
+        "Microsoft.Framework.Runtime": "1.0.0-*",
+        "Microsoft.Framework.CommandLineUtils": { "version": "1.0.0-*", "type": "build" }
+    },
+    "commands": {
+        "dpa": "run"
+    },
+    "frameworks": {
+        "aspnet50": { }
+    }
+}
