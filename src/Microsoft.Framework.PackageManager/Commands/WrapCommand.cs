@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.Versioning;
 using System.Xml.Linq;
 using Microsoft.Framework.Runtime;
@@ -16,12 +17,14 @@ namespace Microsoft.Framework.PackageManager
 {
     public class WrapCommand
     {
+        private string _referenceResolverPath;
+        private static readonly string ReferenceResolverFileName = "ReferenceResolver.xml";
+        private static readonly string WrapperProjectVersion = "1.0.0-*";
+        private static readonly char PathSeparator = '/';
+
         public string CsProjectPath { get; set; }
         public string Configuration { get; set; }
         public Reports Reports { get; set; }
-
-        private static readonly string WrapperProjectVersion = "1.0.0-*";
-        private static readonly char PathSeparator = '/';
 
         public bool ExecuteCommand()
         {
@@ -44,18 +47,14 @@ namespace Microsoft.Framework.PackageManager
 
             CsProjectPath = Path.GetFullPath(CsProjectPath);
 
-            var properties = new[]
-            {
-                "/p:Configuration=" + Configuration,
-                "/p:DesignTimeBuild=true",
-                "/p:BuildProjectReferences=false",
-                "/p:_ResolveReferenceDependencies=true" // Dump entire assembly reference closure
-            };
-
             var rootDir = ProjectResolver.ResolveRootDirectory(Path.GetDirectoryName(CsProjectPath));
             var wrapRoot = Path.Combine(rootDir, "wrap");
 
             var xDoc = ResolveReferences();
+            if (xDoc == null)
+            {
+                return false;
+            }
 
             foreach (var projectElement in xDoc.Root.Elements())
             {
@@ -69,7 +68,103 @@ namespace Microsoft.Framework.PackageManager
 
         private XDocument ResolveReferences()
         {
-            throw new NotImplementedException();
+            var msbuildExe = GetMSBuildExe();
+            if (string.IsNullOrEmpty(msbuildExe))
+            {
+                return null;
+            }
+
+            // Put ReferenceResolver.xml into a temporary dir
+            var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            Directory.CreateDirectory(tempDir);
+            _referenceResolverPath = Path.Combine(tempDir, ReferenceResolverFileName);
+#if ASPNET50
+            var assembly = GetType().Assembly;
+#else
+            var assembly = typeof(WrapCommand).GetTypeInfo().Assembly;
+#endif
+            var embeddedResourceName = "compiler/resources/" + ReferenceResolverFileName;
+            using (var stream = assembly.GetManifestResourceStream(embeddedResourceName))
+            {
+                File.WriteAllText(_referenceResolverPath, stream.ReadToEnd());
+            }
+
+            var xDoc = new XDocument();
+            xDoc.Add(new XElement("root"));
+            var projectFiles = new List<string> { CsProjectPath };
+            var intermediateResultFile = Path.Combine(tempDir, Path.GetRandomFileName());
+
+            for (var i = 0; i != projectFiles.Count; i++)
+            {
+                var properties = new[]
+                {
+                    "/p:ProjectFilePath=\"\{projectFiles[i]}\"",
+                    "/p:ResultFilePath=\"\{intermediateResultFile}\"",
+                    "/p:Configuration=\{Configuration}",
+                    "/p:DesignTimeBuild=true",
+                    "/p:BuildProjectReferences=false",
+                    "/p:_ResolveReferenceDependencies=true" // Dump entire assembly reference closure
+                };
+
+                var startInfo = new ProcessStartInfo()
+                {
+                    WorkingDirectory = Path.GetDirectoryName(projectFiles[i]),
+                    UseShellExecute = false,
+                    FileName = msbuildExe,
+                    Arguments = string.Format("\"{0}\" {1}",
+                        _referenceResolverPath, string.Join(" ", properties)),
+                    RedirectStandardOutput = true
+                };
+
+                var process = Process.Start(startInfo);
+                var stdOut = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+
+                var projectXDoc = XDocument.Parse(File.ReadAllText(intermediateResultFile));
+                projectXDoc.Root.SetAttributeValue("buildResult", process.ExitCode == 0);
+
+                foreach (var item in GetItemsByType(projectXDoc.Root, type: "ProjectReference"))
+                {
+                    var relativePath = item.Attribute("evaluated").Value;
+                    var fullPath = PathUtility.GetAbsolutePath(projectFiles[i], relativePath);
+                    if (!projectFiles.Contains(fullPath))
+                    {
+                        projectFiles.Add(fullPath);
+                    }
+                }
+
+                xDoc.Root.Add(projectXDoc.Root);
+            }
+
+            FileOperationUtils.DeleteFolder(tempDir);
+
+            return xDoc;
+        }
+
+        private string GetMSBuildExe()
+        {
+#if ASPNET50
+            var programFilesPath = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+#else
+            var programFilesPath = Environment.GetEnvironmentVariable("PROGRAMFILES(X86)");
+#endif
+            // On 32-bit Windows
+            if (string.IsNullOrEmpty(programFilesPath))
+            {
+#if ASPNET50
+                programFilesPath = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+#else
+                programFilesPath = Environment.GetEnvironmentVariable("PROGRAMFILES");
+#endif
+            }
+
+            var msbuildExe = Path.Combine(programFilesPath, "MSBuild", "14.0", "Bin", "MSBuild.exe");
+            if (!File.Exists(msbuildExe))
+            {
+                Reports.Error.WriteLine(string.Format("Unable to locate {0}".Red().Bold(), msbuildExe));
+                return string.Empty;
+            }
+            return msbuildExe;
         }
 
         private static void UpdateGlobalJson(string rootDir)
@@ -144,8 +239,9 @@ namespace Microsoft.Framework.PackageManager
             // Add dependency projects to 'dependencies' section of the target framework
             foreach(var itemElement in GetItemsByType(projectElement, type: "ProjectReference"))
             {
-                var referenceProjectName = GetMetadataValue(itemElement, "Name");
-                var outputName = GetReferenceProjectOutputName(projectElement, referenceProjectName);
+                var relativePath = itemElement.Attribute("evaluated").Value;
+                var referenceProjectFile = PathUtility.GetAbsolutePath(projectFile, relativePath);
+                var outputName = GetReferenceProjectOutputName(projectElement, referenceProjectFile);
                 Reports.Information.WriteLine("  Adding project dependency '{0}.{1}'",
                     outputName, WrapperProjectVersion);
                 AddProjectDependency(projectJson, outputName, targetFramework);
@@ -179,20 +275,15 @@ namespace Microsoft.Framework.PackageManager
             Reports.Information.WriteLine();
         }
 
-        private string GetReferenceProjectOutputName(XElement projectElement, string referenceProjectName)
+        private string GetReferenceProjectOutputName(XElement projectElement, string referenceProjectFile)
         {
-            foreach (var itemElement in GetItemsByType(projectElement, "ReferencePath"))
-            {
-                var name = GetMetadataValue(itemElement, "Name", throwsIfNotFound: false);
-                if (string.Equals(name, referenceProjectName))
-                {
-                    return Path.GetFileNameWithoutExtension(itemElement.Attribute("evaluated").Value);
-                }
-            }
+            var refProjectElement = projectElement.Parent.Elements("project")
+                .Where(x => string.Equals(referenceProjectFile, x.Attribute("projectFile").Value,
+                    StringComparison.OrdinalIgnoreCase))
+                .SingleOrDefault();
 
-            throw new InvalidDataException(
-                string.Format("Unable to find output assembly name for project reference '{0}' in dumped metadata",
-                    referenceProjectName));
+            var refProjectOutputFile = GetOutputAssemblyPath(refProjectElement);
+            return Path.GetFileNameWithoutExtension(refProjectOutputFile);
         }
 
         private static bool IsAssemblyFromNuGetPackage(XElement itemElement, IEnumerable<string> nugetPackagePaths)
@@ -279,7 +370,7 @@ namespace Microsoft.Framework.PackageManager
             return projectElement.Elements("item").Where(x => x.Attribute("itemType").Value == type);
         }
 
-        private static string GetOutputAssemblyPath(XElement projectElement)
+        private string GetOutputAssemblyPath(XElement projectElement)
         {
             const string projectOutputItemType = "BuiltProjectOutputGroupKeyOutput";
             var itemElement = GetItemsByType(projectElement, type: projectOutputItemType).SingleOrDefault();
@@ -287,7 +378,14 @@ namespace Microsoft.Framework.PackageManager
             {
                 throw new InvalidDataException(string.Format("'{0}' is missing from MSBuild output", projectOutputItemType));
             }
-            return itemElement.Attribute("evaluated").Value;
+            var outputAssemblyPath = itemElement.Attribute("evaluated").Value;
+
+            // The assembly path was mistakenly infered by MSBuild, which used parent dir of
+            //ReferenceResolver.xml as base dir. So we need to correct it here.
+            var projectDir = PathUtility.EnsureTrailingSlash(
+                Path.GetDirectoryName(projectElement.Attribute("projectFile").Value));
+            var resolverParentDir = PathUtility.EnsureTrailingSlash(Path.GetDirectoryName(_referenceResolverPath));
+            return outputAssemblyPath.Replace(resolverParentDir, projectDir);
         }
 
         private static FrameworkName GetTargetFramework(XElement projectElement)
