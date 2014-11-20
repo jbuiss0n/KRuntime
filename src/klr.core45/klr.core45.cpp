@@ -5,6 +5,7 @@
 
 #include "..\klr\klr.h"
 #include "klr.core45.h"
+#include "tpa.h"
 
 #define TRUSTED_PLATFORM_ASSEMBLIES_STRING_BUFFER_SIZE_CCH (63 * 1024) //32K WCHARs
 #define CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED(errno) { if (errno) { goto Finished;}}
@@ -27,16 +28,19 @@ bool ScanDirectory(WCHAR* szDirectory, WCHAR* szPattern, LPWSTR pszTrustedPlatfo
     bool ret = true;
     errno_t errno = 0;
     WIN32_FIND_DATA ffd = {};
-    
+
+    size_t cBaseTpa = 0;
+    LPWSTR* ppBaseTpa = nullptr;
+
     WCHAR wszPattern[MAX_PATH];
     wszPattern[0] = L'\0';
-    
+
     errno = wcscpy_s(wszPattern, _countof(wszPattern), szDirectory);
     CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
 
     errno = wcscat_s(wszPattern, _countof(wszPattern), szPattern);
     CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-    
+
     HANDLE findHandle = FindFirstFile(wszPattern, &ffd);
 
     if (INVALID_HANDLE_VALUE == findHandle)
@@ -44,6 +48,8 @@ bool ScanDirectory(WCHAR* szDirectory, WCHAR* szPattern, LPWSTR pszTrustedPlatfo
         ret = false;
         goto Finished;
     }
+
+    CreateTpaBase(&ppBaseTpa, &cBaseTpa);
 
     do
     {
@@ -53,59 +59,55 @@ bool ScanDirectory(WCHAR* szDirectory, WCHAR* szPattern, LPWSTR pszTrustedPlatfo
         }
         else
         {
-            if (wcscmp(ffd.cFileName, L"klr.host.dll") == 0 || 
-                wcscmp(ffd.cFileName, L"klr.host.ni.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.ApplicationHost.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.ApplicationHost.ni.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Runtime.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Runtime.ni.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Runtime.Loader.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Runtime.Loader.ni.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Runtime.Roslyn.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Runtime.Roslyn.ni.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Project.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.Project.ni.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.DesignTimeHost.dll") == 0 ||
-                wcscmp(ffd.cFileName, L"Microsoft.Framework.DesignTimeHost.ni.dll") == 0 ||
-				wcscmp(ffd.cFileName, L"Newtonsoft.Json.dll") == 0 ||
-				wcscmp(ffd.cFileName, L"Newtonsoft.Json.ni.dll") == 0)
+            bool bMatch = false;
+            for (size_t idx = 0; idx < cBaseTpa; ++idx)
             {
-                // Exclude these assemblies from the TPA list since they need to
-                // be handled by the loader since they depend on assembly neutral
-                // interfaces
-                continue;
+                if (wcscmp(ffd.cFileName, ppBaseTpa[idx]) == 0)
+                {
+                    bMatch = true;
+                    break;
+                }
             }
 
-            errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, szDirectory);
-            CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-            
-            errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, ffd.cFileName);
-            CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-            
-            errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, L";");
-            CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+            if (bMatch)
+            {
+                errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, szDirectory);
+                CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+
+                errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, ffd.cFileName);
+                CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+
+                errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, L";");
+                CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+            }
         }
 
     } while (FindNextFile(findHandle, &ffd) != 0);
 
+
 Finished:
+    if (ppBaseTpa != nullptr)
+    {
+        FreeTpaBase(ppBaseTpa, cBaseTpa);
+    }
+
     return ret;
 }
 
 bool KlrLoadLibraryExWAndGetProcAddress(
-            LPWSTR   pwszModuleFileName, 
-            LPCSTR   pszFunctionName, 
-            HMODULE* phModule, 
-            FARPROC* ppFunction)
+    LPWSTR   pwszModuleFileName,
+    LPCSTR   pszFunctionName,
+    HMODULE* phModule,
+    FARPROC* ppFunction)
 {
     bool fSuccess = true;
-    HMODULE hModule = nullptr; 
+    HMODULE hModule = nullptr;
     FARPROC pFunction = nullptr;
-    
+
     //Clear out params
     *phModule = nullptr;
     *(FARPROC*)ppFunction = nullptr;
-    
+
     //Load module and look for require DLL export
     hModule = ::LoadLibraryExW(pwszModuleFileName, NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (!hModule)
@@ -115,7 +117,7 @@ bool KlrLoadLibraryExWAndGetProcAddress(
         fSuccess = false;
         goto Finished;
     }
-    
+
     pFunction = ::GetProcAddress(hModule, pszFunctionName);
     if (!pFunction)
     {
@@ -150,8 +152,8 @@ HMODULE LoadCoreClr()
     TCHAR szKreTrace[1] = {};
     bool m_fVerboseTrace = GetEnvironmentVariableW(L"KRE_TRACE", szKreTrace, 1) > 0;
     LPWSTR rgwzOSLoaderModuleNames[] = {
-                        L"api-ms-win-core-libraryloader-l1-1-1.dll", 
-                        L"kernel32.dll", 
+                        L"api-ms-win-core-libraryloader-l1-1-1.dll",
+                        L"kernel32.dll",
                         NULL
     };
     LPWSTR rgwszModuleFileName = NULL;
@@ -192,23 +194,23 @@ HMODULE LoadCoreClr()
         while (rgwszModuleFileName != NULL)
         {
             fSuccess = KlrLoadLibraryExWAndGetProcAddress(
-                            rgwszModuleFileName, 
-                            pszAddDllDirectoryName, 
-                            &hOSLoaderModule, 
-                            (FARPROC*)&pFnAddDllDirectory);
+                rgwszModuleFileName,
+                pszAddDllDirectoryName,
+                &hOSLoaderModule,
+                (FARPROC*)&pFnAddDllDirectory);
             if (fSuccess)
                 break;
-            
+
             dwModuleFileName++;
             rgwszModuleFileName = rgwzOSLoaderModuleNames[dwModuleFileName];
-         }
-         
+        }
+
         if (!hOSLoaderModule || !pFnAddDllDirectory)
         {
             fSuccess = false;
             goto Finished;
         }
-         
+
         //Find the second DLL export
         pFnSetDefaultDllDirectories = (FnSetDefaultDllDirectories)::GetProcAddress(hOSLoaderModule, pszSetDefaultDllDirectoriesName);
         if (!pFnSetDefaultDllDirectories)
@@ -226,11 +228,11 @@ HMODULE LoadCoreClr()
             fSuccess = false;
             goto Finished;
         }
-        
+
         pFnAddDllDirectory(szCoreClrDirectory);
         // Modify the default dll flags so that dependencies can be found in this path
         pFnSetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS);
-        
+
         fSuccess = true;
 
         // Continue loading as usual
@@ -282,7 +284,7 @@ bool Win32KDisable()
     {
         goto Finished;
     }
-    
+
     if (wcscmp(szKreWin32KDisable, L"1") != 0)
     {
         fSuccess = false;
@@ -290,15 +292,15 @@ bool Win32KDisable()
     }
 
     fSuccess = KlrLoadLibraryExWAndGetProcAddress(
-                    lpwszModuleFileName, 
-                    pszSetProcessMitigationPolicy, 
-                    &hProcessThreadsModule, 
-                    (FARPROC*)&pFnSetProcessMitigationPolicy);
+        lpwszModuleFileName,
+        pszSetProcessMitigationPolicy,
+        &hProcessThreadsModule,
+        (FARPROC*)&pFnSetProcessMitigationPolicy);
     if (!fSuccess)
     {
         goto Finished;
     }
-    
+
     if (!hProcessThreadsModule || !pFnSetProcessMitigationPolicy)
     {
         fSuccess = false;
@@ -306,10 +308,10 @@ bool Win32KDisable()
     }
 
     if (pFnSetProcessMitigationPolicy(
-              ProcessSystemCallDisablePolicy,   //_In_  PROCESS_MITIGATION_POLICY MitigationPolicy,
-              &systemCallDisablePolicy,         //_In_  PVOID lpBuffer,
-              sizeof(systemCallDisablePolicy)  //_In_  SIZE_T dwLength
-            ))
+        ProcessSystemCallDisablePolicy,   //_In_  PROCESS_MITIGATION_POLICY MitigationPolicy,
+        &systemCallDisablePolicy,         //_In_  PVOID lpBuffer,
+        sizeof(systemCallDisablePolicy)  //_In_  SIZE_T dwLength
+        ))
     {
         printf_s("KRE_WIN32K_DISABLE successful.\n");
     }
@@ -320,7 +322,7 @@ Finished:
     {
         pFnSetProcessMitigationPolicy = nullptr;
     }
-    
+
     if (hProcessThreadsModule)
     {
         FreeLibrary(hProcessThreadsModule);
@@ -435,13 +437,13 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
     };
 
     cchTrustedPlatformAssemblies = TRUSTED_PLATFORM_ASSEMBLIES_STRING_BUFFER_SIZE_CCH;
-    pwszTrustedPlatformAssemblies = (LPWSTR)calloc(cchTrustedPlatformAssemblies+1, sizeof(WCHAR));
+    pwszTrustedPlatformAssemblies = (LPWSTR)calloc(cchTrustedPlatformAssemblies + 1, sizeof(WCHAR));
     if (pwszTrustedPlatformAssemblies == NULL)
     {
         goto Finished;
     }
     pwszTrustedPlatformAssemblies[0] = L'\0';
-    
+
     // Try native images first
     if (!ScanDirectory(szCoreClrDirectory, L"*.ni.dll", pwszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies))
     {
@@ -506,6 +508,8 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
         property_values,
         &domainId);
 
+    wprintf_s(pwszTrustedPlatformAssemblies);
+
     if (FAILED(hr))
     {
         wprintf_s(L"TPA      %d %s\n", wcslen(pwszTrustedPlatformAssemblies), pwszTrustedPlatformAssemblies);
@@ -537,8 +541,8 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
     pCLRRuntimeHost->UnloadAppDomain(domainId, true);
 
     pCLRRuntimeHost->Stop();
-    
-Finished:    
+
+Finished:
     if (pwszTrustedPlatformAssemblies != NULL)
     {
         free(pwszTrustedPlatformAssemblies);

@@ -24,7 +24,7 @@ namespace DependencyAnalyzer.Util
             _accessor = cacheContextAccessor;
             _cache = cache;
             _assemblyFolder = assemblyFolder;
-            _appbasePath = environment.ApplicationBasePath;
+            _appbasePath = Path.GetDirectoryName(environment.ApplicationBasePath);
         }
 
         public HashSet<string> GetContractDependencies(string projectName)
