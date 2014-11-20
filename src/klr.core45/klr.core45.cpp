@@ -23,6 +23,7 @@ void GetModuleDirectory(HMODULE module, LPWSTR szPath)
     szPath[dirLength + 1] = '\0';
 }
 
+// Generate a list of trusted platform assembiles. 
 bool GetTrustedPlatformAssembliesList(WCHAR* szDirectory, bool bNative, LPWSTR pszTrustedPlatformAssemblies, size_t cchTrustedPlatformAssemblies)
 {
     bool ret = true;
@@ -31,11 +32,11 @@ bool GetTrustedPlatformAssembliesList(WCHAR* szDirectory, bool bNative, LPWSTR p
     size_t cTpaAssemblyNames = 0;
     LPWSTR* ppszTpaAssemblyNames = nullptr;
 
-    // Build the list of the tpa assemblies in native image
-    CreateTpaBase(&ppszTpaAssemblyNames, &cTpaAssemblyNames, false);
+    // Build the list of the tpa assemblie 
+    CreateTpaBase(&ppszTpaAssemblyNames, &cTpaAssemblyNames, bNative);
 
-    // scan the directory to see if all the files in TPA list exist
-    for (int i = 0; i < cTpaAssemblyNames; ++i)
+    // Scan the directory to see if all the files in TPA list exist
+    for (size_t i = 0; i < cTpaAssemblyNames; ++i)
     {
         WCHAR wszPattern[MAX_PATH];
         wszPattern[0] = L'\0';
@@ -58,7 +59,7 @@ bool GetTrustedPlatformAssembliesList(WCHAR* szDirectory, bool bNative, LPWSTR p
         }
     }
 
-    for (int i = 0; i < cTpaAssemblyNames; ++i)
+    for (size_t i = 0; i < cTpaAssemblyNames; ++i)
     {
         errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, szDirectory);
         CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
@@ -243,7 +244,7 @@ HMODULE LoadCoreClr()
 
 Finished:
     return hCoreCLRModule;
-    }
+}
 
 
 /*
@@ -492,8 +493,6 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
         property_keys,
         property_values,
         &domainId);
-
-    wprintf_s(pwszTrustedPlatformAssemblies);
 
     if (FAILED(hr))
     {
