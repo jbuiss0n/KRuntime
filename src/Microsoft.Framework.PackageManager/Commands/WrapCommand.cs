@@ -94,12 +94,10 @@ namespace Microsoft.Framework.PackageManager
                 EmitProjectWrapper(projectElement, rootDir);
             }
 
-            UpdateGlobalJson(rootDir);
-
             return true;
         }
 
-        private static void UpdateGlobalJson(string rootDir)
+        private static void AddWrapFolderToGlobalJson(string rootDir)
         {
             var globalJsonPath = Path.Combine(rootDir, GlobalSettings.GlobalFileName);
             var rootObj = LoadOrCreateJson(globalJsonPath);
@@ -140,6 +138,7 @@ namespace Microsoft.Framework.PackageManager
             var targetProjectJson = LocateExistingProject(rootDir, projectName);
             if (string.IsNullOrEmpty(targetProjectJson))
             {
+                AddWrapFolderToGlobalJson(rootDir);
                 targetProjectJson = Path.Combine(wrapRoot, projectName, Runtime.Project.ProjectFileName);
             }
 
