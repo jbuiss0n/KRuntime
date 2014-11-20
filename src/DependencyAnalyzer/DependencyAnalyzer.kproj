@@ -15,7 +15,7 @@
   <PropertyGroup>
     <SchemaVersion>2.0</SchemaVersion>
     <DevelopmentServerPort>0</DevelopmentServerPort>
-    <CommandLineArguments>runtime C:\playground\CoreCLR.1.0.0-beta2-10182\Runtime\x86 c:\playground\dependencies.txt</CommandLineArguments>
+    <CommandLineArguments>tpa C:\playground\CoreCLR.1.0.0-beta2-10182\Runtime\x86 c:\playground\0\tpa.cpp</CommandLineArguments>
     <DebugTarget>dpa</DebugTarget>
   </PropertyGroup>
   <Import Project="$(VSToolsPath)\AspNet\Microsoft.Web.AspNet.targets" Condition="'$(VSToolsPath)' != ''" />

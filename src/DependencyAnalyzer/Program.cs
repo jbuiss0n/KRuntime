@@ -39,12 +39,12 @@ namespace DependencyAnalyzer
                 c.Description = "Build minimal trusted platform assembly list";
 
                 var assemblyFolder = c.Argument("[assemblies]", "Path to the folder contains the assemblies from which the TPA is built from.");
-                var outputFile = c.Argument("[output]", "Path to the file where the TPA list is saved to. If omitted, output to console");
+                var tpaSourceFile = c.Argument("[tpa.cpp]", "Path to the source file where the TPA list is generated in place.");
 
                 c.HelpOption("-?|-h|-help");
                 c.OnExecute(() =>
                 {
-                    var command = new BuildTpaCommand(_environment, assemblyFolder.Value, outputFile.Value);
+                    var command = new BuildTpaCommand(_environment, assemblyFolder.Value, tpaSourceFile.Value);
 
                     return command.Execute();
                 });
