@@ -312,11 +312,7 @@ namespace Microsoft.Framework.PackageManager
         private static JObject LoadOrCreateProjectJson(string jsonFilePath)
         {
             var projectJson = LoadOrCreateJson(jsonFilePath);
-            var version = projectJson["version"]?.Value<string>();
-            if (string.IsNullOrEmpty(version))
-            {
-                projectJson["version"] = WrapperProjectVersion;
-            }
+            SetPropertyValueIfEmpty(projectJson, "version", WrapperProjectVersion);
             return projectJson;
         }
 
@@ -351,7 +347,7 @@ namespace Microsoft.Framework.PackageManager
             var frameworksObj = GetOrAddJObject(projectJson, "frameworks");
             var targetFrameworkObj = GetOrAddJObject(frameworksObj, GetShortFrameworkName(targetFramework));
             var dependenciesObj = GetOrAddJObject(targetFrameworkObj, "dependencies");
-            dependenciesObj[nugetPackage.Identity] = nugetPackage.Version;
+            SetPropertyValueIfEmpty(dependenciesObj, nugetPackage.Identity, nugetPackage.Version);
         }
 
         private static void AddProjectDependency(JObject projectJson, string projectName, FrameworkName targetFramework)
@@ -359,7 +355,7 @@ namespace Microsoft.Framework.PackageManager
             var frameworksObj = GetOrAddJObject(projectJson, "frameworks");
             var targetFrameworkObj = GetOrAddJObject(frameworksObj, GetShortFrameworkName(targetFramework));
             var dependenciesObj = GetOrAddJObject(targetFrameworkObj, "dependencies");
-            dependenciesObj[projectName] = WrapperProjectVersion;
+            SetPropertyValueIfEmpty(dependenciesObj, projectName, WrapperProjectVersion);
         }
 
         private static string GetShortFrameworkName(FrameworkName targetFramework)
@@ -382,12 +378,13 @@ namespace Microsoft.Framework.PackageManager
             var frameworksObj = GetOrAddJObject(projectJson, "frameworks");
             var targetFrameworkObj = GetOrAddJObject(frameworksObj, GetShortFrameworkName(targetFramework));
             var binObj = GetOrAddJObject(targetFrameworkObj, "bin");
-            binObj["assembly"] = assemblyPath;
+            SetPropertyValueIfEmpty(binObj, "assembly", assemblyPath);
 
             if (addPdbPath)
             {
                 var pdbPath = Path.ChangeExtension(assemblyPath, ".pdb");
                 binObj["pdb"] = pdbPath;
+                SetPropertyValueIfEmpty(binObj, "pdb", pdbPath);
             }
         }
 
@@ -470,6 +467,14 @@ namespace Microsoft.Framework.PackageManager
                         metadataName, Environment.NewLine, itemElement.ToString()));
             }
             return metadataValue;
+        }
+
+        private static void SetPropertyValueIfEmpty(JObject obj, string name, string value)
+        {
+            if (obj[name] == null)
+            {
+                obj[name] = value;
+            }
         }
 
         private class NuGetPackage
