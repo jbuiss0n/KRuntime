@@ -23,72 +23,57 @@ void GetModuleDirectory(HMODULE module, LPWSTR szPath)
     szPath[dirLength + 1] = '\0';
 }
 
-bool ScanDirectory(WCHAR* szDirectory, WCHAR* szPattern, LPWSTR pszTrustedPlatformAssemblies, size_t cchTrustedPlatformAssemblies)
+bool GetTrustedPlatformAssembliesList(WCHAR* szDirectory, bool bNative, LPWSTR pszTrustedPlatformAssemblies, size_t cchTrustedPlatformAssemblies)
 {
     bool ret = true;
     errno_t errno = 0;
     WIN32_FIND_DATA ffd = {};
+    size_t cTpaAssemblyNames = 0;
+    LPWSTR* ppszTpaAssemblyNames = nullptr;
 
-    size_t cBaseTpa = 0;
-    LPWSTR* ppBaseTpa = nullptr;
+    // Build the list of the tpa assemblies in native image
+    CreateTpaBase(&ppszTpaAssemblyNames, &cTpaAssemblyNames, false);
 
-    WCHAR wszPattern[MAX_PATH];
-    wszPattern[0] = L'\0';
-
-    errno = wcscpy_s(wszPattern, _countof(wszPattern), szDirectory);
-    CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-
-    errno = wcscat_s(wszPattern, _countof(wszPattern), szPattern);
-    CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-
-    HANDLE findHandle = FindFirstFile(wszPattern, &ffd);
-
-    if (INVALID_HANDLE_VALUE == findHandle)
+    // scan the directory to see if all the files in TPA list exist
+    for (int i = 0; i < cTpaAssemblyNames; ++i)
     {
-        ret = false;
-        goto Finished;
+        WCHAR wszPattern[MAX_PATH];
+        wszPattern[0] = L'\0';
+
+        errno = wcscpy_s(wszPattern, _countof(wszPattern), szDirectory);
+        CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+
+        errno = wcscat_s(wszPattern, _countof(wszPattern), ppszTpaAssemblyNames[i]);
+        CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+
+        HANDLE findHandle = FindFirstFile(wszPattern, &ffd);
+
+        if ((findHandle == INVALID_HANDLE_VALUE) ||
+            (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            // if file is missing or a directory is found, breaks the loop and
+            // set the missing flag to true
+            ret = false;
+            goto Finished;
+        }
     }
 
-    CreateTpaBase(&ppBaseTpa, &cBaseTpa);
-
-    do
+    for (int i = 0; i < cTpaAssemblyNames; ++i)
     {
-        if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-        {
-            // Skip directories
-        }
-        else
-        {
-            bool bMatch = false;
-            for (size_t idx = 0; idx < cBaseTpa; ++idx)
-            {
-                if (wcscmp(ffd.cFileName, ppBaseTpa[idx]) == 0)
-                {
-                    bMatch = true;
-                    break;
-                }
-            }
+        errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, szDirectory);
+        CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
 
-            if (bMatch)
-            {
-                errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, szDirectory);
-                CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+        errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, ppszTpaAssemblyNames[i]);
+        CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
 
-                errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, ffd.cFileName);
-                CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-
-                errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, L";");
-                CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
-            }
-        }
-
-    } while (FindNextFile(findHandle, &ffd) != 0);
-
+        errno = wcscat_s(pszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies, L";");
+        CHECK_RETURN_VALUE_FAIL_EXIT_VIA_FINISHED_SETSTATE(errno, ret = false);
+    }
 
 Finished:
-    if (ppBaseTpa != nullptr)
+    if (ppszTpaAssemblyNames != nullptr)
     {
-        FreeTpaBase(ppBaseTpa, cBaseTpa);
+        FreeTpaBase(ppszTpaAssemblyNames, cTpaAssemblyNames);
     }
 
     return ret;
@@ -258,7 +243,7 @@ HMODULE LoadCoreClr()
 
 Finished:
     return hCoreCLRModule;
-}
+    }
 
 
 /*
@@ -445,9 +430,9 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
     pwszTrustedPlatformAssemblies[0] = L'\0';
 
     // Try native images first
-    if (!ScanDirectory(szCoreClrDirectory, L"*.ni.dll", pwszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies))
+    if (!GetTrustedPlatformAssembliesList(szCoreClrDirectory, true, pwszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies))
     {
-        if (!ScanDirectory(szCoreClrDirectory, L"*.dll", pwszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies))
+        if (!GetTrustedPlatformAssembliesList(szCoreClrDirectory, false, pwszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies))
         {
             printf_s("Failed to find files in the coreclr directory\n");
             return false;
