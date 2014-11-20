@@ -86,13 +86,12 @@ namespace Microsoft.Framework.PackageManager
             }
 
             var rootDir = ProjectResolver.ResolveRootDirectory(Path.GetDirectoryName(CsProjectPath));
-            var wrapRoot = Path.Combine(rootDir, "wrap");
 
             var xDoc = XDocument.Parse(stdOut);
 
             foreach (var projectElement in xDoc.Root.Elements())
             {
-                EmitProjectWrapper(projectElement, wrapRoot);
+                EmitProjectWrapper(projectElement, rootDir);
             }
 
             UpdateGlobalJson(rootDir);
@@ -124,7 +123,7 @@ namespace Microsoft.Framework.PackageManager
             }
         }
 
-        private void EmitProjectWrapper(XElement projectElement, string wrapRoot)
+        private void EmitProjectWrapper(XElement projectElement, string rootDir)
         {
             var projectFile = Path.GetFullPath(projectElement.Attribute("projectFile").Value);
             if (!string.Equals("true", projectElement.Attribute("buildResult").Value))
@@ -136,8 +135,14 @@ namespace Microsoft.Framework.PackageManager
             var outputAssemblyPath = GetOutputAssemblyPath(projectElement);
 
             // Name of the wrapper project is output assembly name, instead of .csproj file name
+            var wrapRoot = Path.Combine(rootDir, "wrap");
             var projectName = Path.GetFileNameWithoutExtension(outputAssemblyPath);
-            var targetProjectJson = Path.Combine(wrapRoot, projectName, Runtime.Project.ProjectFileName);
+            var targetProjectJson = LocateExistingProject(rootDir, projectName);
+            if (string.IsNullOrEmpty(targetProjectJson))
+            {
+                targetProjectJson = Path.Combine(wrapRoot, projectName, Runtime.Project.ProjectFileName);
+            }
+
             var targetFramework = GetTargetFramework(projectElement);
 
             Reports.Information.WriteLine("Wrapping project '{0}' for '{1}'", projectName, targetFramework);
@@ -202,6 +207,23 @@ namespace Microsoft.Framework.PackageManager
             File.WriteAllText(targetProjectJson, projectJson.ToString());
 
             Reports.Information.WriteLine();
+        }
+
+        private static string LocateExistingProject(string rootDir, string projectName)
+        {
+            Runtime.Project project;
+            foreach (var projectJson in Directory.EnumerateFiles(rootDir, "project.json", SearchOption.AllDirectories))
+            {
+                if (!Runtime.Project.TryGetProject(projectJson, out project))
+                {
+                    continue;
+                }
+                if (string.Equals(projectName, project.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return projectJson;
+                }
+            }
+            return string.Empty;
         }
 
         private string GetReferenceProjectOutputName(XElement projectElement, string referenceProjectName)
