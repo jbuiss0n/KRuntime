@@ -52,12 +52,14 @@ namespace DependencyAnalyzer.Util
             {
                 var isProject = string.Equals(LibraryTypeProject, library.Type, StringComparison.OrdinalIgnoreCase);
 
+                if (isProject)
+                {
+                    continue;
+                }
+
                 foreach (var loadableAssembly in library.LoadableAssemblies)
                 {
-                    if (!isProject || !string.Equals(library.Name, loadableAssembly.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        usedAssemblies.Add(loadableAssembly.Name);
-                    }
+                    usedAssemblies.Add(loadableAssembly.Name);
 
                     PackageAssembly assembly;
                     if (hostContext.NuGetDependencyProvider.PackageAssemblyLookup.TryGetValue(loadableAssembly.Name, out assembly))
