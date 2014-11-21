@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using DependencyAnalyzer.Util;
 using Microsoft.Framework.Runtime;
 
@@ -96,29 +97,81 @@ namespace DependencyAnalyzer.Commands
             var head =  FindLineOfCode(content, "// MARK: begin tpa list size") + 1;
             var tail =  FindLineOfCode(content, "// MARK: end tpa list size");
 
-            content.RemoveRange(head, tail - head);
-            content.Insert(
-                head++,
-                "    // updated on UTC " + DateTime.UtcNow.ToString("yyyy/MM/dd hh:mm:ss"));
-            content.Insert(
-                head++,
-                string.Format("    const size_t count = {0};", tpa.Length));
+            bool toUpdate = true;
+
+            // try to determine if the count in the current file need to be updated
+            if (tail - head > 0)
+            {
+                var m = new Regex(@"(^\s*const\s*size_t\s*count\s*=\s*\d+;\s*)");
+                var r = new Regex(@"(^\s*const\s*size_t\s*count\s*=\s*)|(;\s*)\z");
+
+                for (int i = head; i < tail; ++i)
+                {
+                    if (m.IsMatch(content[i]))
+                    {
+                        var rawValue = r.Replace(content[i], "");
+                        int originalValue;
+                        if (int.TryParse(rawValue, out originalValue))
+                        {
+                            if (originalValue == tpa.Length)
+                            {
+                                toUpdate = false;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (toUpdate)
+            {
+                content.RemoveRange(head, tail - head);
+                content.Insert(
+                    head++,
+                    "    // updated on UTC " + DateTime.UtcNow.ToString("yyyy/MM/dd hh:mm:ss"));
+                content.Insert(
+                    head++,
+                    string.Format("    const size_t count = {0};", tpa.Length));
+            }
         }
 
         private void FillTpaList(string[] tpa, List<string> content, string suffix, string beginMark, string endMark)
         {
-            var head =  FindLineOfCode(content,  beginMark) + 1;
+            var head =  FindLineOfCode(content, beginMark) + 1;
             var tail =  FindLineOfCode(content, endMark);
-            content.RemoveRange(head, tail - head);
-            content.Insert(
-                head++,
-                "        // updated on UTC " + DateTime.UtcNow.ToString("yyyy/MM/dd hh:mm:ss"));
 
-            for (int i = 0; i < tpa.Length; ++i)
+            bool toUpdate = true;
+
+            // try to determine if the current tpa.cpp already contains the required tpa
+            // if so, skip updating.
+            if (tpa.Length == tail - head - 1)
             {
+                var originalCount = tail-head-1;
+                var originalItems = new string[originalCount];
+                content.CopyTo(head + 1, originalItems, 0, originalCount);
+
+                var rx = new Regex(@"(^\s*pArray\[\d+\]\s*=\s*_wcsdup\(L"")|((\.ni)?\.dll""\);\s*\z)");
+                var originalHashset = new HashSet<string>(originalItems.Select(line => rx.Replace(line, "")));
+
+                originalHashset.SymmetricExceptWith(tpa);
+                if (!originalHashset.Any())
+                {
+                    toUpdate = false;
+                }
+            }
+
+            if (toUpdate)
+            {
+                content.RemoveRange(head, tail - head);
                 content.Insert(
-                    head + i,
-                    string.Format("        pArray[{0}] = _wcsdup(L\"{1}{2}\");", i, tpa[i], suffix));
+                    head++,
+                    "        // updated on UTC " + DateTime.UtcNow.ToString("yyyy/MM/dd hh:mm:ss"));
+
+                for (int i = 0; i < tpa.Length; ++i)
+                {
+                    content.Insert(
+                        head + i,
+                        string.Format("        pArray[{0}] = _wcsdup(L\"{1}{2}\");", i, tpa[i], suffix));
+                }
             }
         }
 
