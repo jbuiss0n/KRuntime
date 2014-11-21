@@ -134,8 +134,10 @@ namespace Microsoft.Framework.PackageManager
 
             // Name of the wrapper project is output assembly name, instead of .csproj file name
             var wrapRoot = Path.Combine(rootDir, "wrap");
+            var projectDir = Path.GetDirectoryName(projectFile);
             var projectName = Path.GetFileNameWithoutExtension(outputAssemblyPath);
-            var targetProjectJson = LocateExistingProject(rootDir, projectName);
+            var projectResolver = new ProjectResolver(projectDir, rootDir);
+            var targetProjectJson = LocateExistingProject(projectResolver, projectName);
             if (string.IsNullOrEmpty(targetProjectJson))
             {
                 AddWrapFolderToGlobalJson(rootDir);
@@ -158,7 +160,6 @@ namespace Microsoft.Framework.PackageManager
             Reports.Information.WriteLine("    Pdb: {0}", Path.ChangeExtension(relativeAssemblyPath, ".pdb").Bold());
             AddFrameworkBinPaths(projectJson, relativeAssemblyPath, targetFramework, addPdbPath: true);
 
-            var projectDir = Path.GetDirectoryName(projectFile);
             var nugetPackages = ResolveNuGetPackages(projectDir);
             var nugetPackagePaths = nugetPackages.Select(x => x.Path);
 
@@ -208,19 +209,12 @@ namespace Microsoft.Framework.PackageManager
             Reports.Information.WriteLine();
         }
 
-        private static string LocateExistingProject(string rootDir, string projectName)
+        private static string LocateExistingProject(IProjectResolver projectResolver, string projectName)
         {
             Runtime.Project project;
-            foreach (var projectJson in Directory.EnumerateFiles(rootDir, "project.json", SearchOption.AllDirectories))
+            if (projectResolver.TryResolveProject(projectName, out project))
             {
-                if (!Runtime.Project.TryGetProject(projectJson, out project))
-                {
-                    continue;
-                }
-                if (string.Equals(projectName, project.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    return projectJson;
-                }
+                return project.ProjectFilePath;
             }
             return string.Empty;
         }
