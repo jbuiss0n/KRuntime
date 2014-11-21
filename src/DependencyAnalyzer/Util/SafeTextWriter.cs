@@ -9,7 +9,7 @@ namespace DependencyAnalyzer.Util
     public class SafeTextWriter : IDisposable
     {
         private readonly TextWriter _output;
-        private readonly bool       _toDispose;
+        private readonly bool _toDispose;
 
         public static SafeTextWriter CreateOutput(string path = null)
         {

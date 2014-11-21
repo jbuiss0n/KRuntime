@@ -94,8 +94,8 @@ namespace DependencyAnalyzer.Commands
 
         private void FillTpaCount(string[] tpa, List<string> content)
         {
-            var head =  FindLineOfCode(content, "// MARK: begin tpa list size") + 1;
-            var tail =  FindLineOfCode(content, "// MARK: end tpa list size");
+            var head = FindLineOfCode(content, "// MARK: begin tpa list size") + 1;
+            var tail = FindLineOfCode(content, "// MARK: end tpa list size");
 
             bool toUpdate = true;
 
@@ -136,8 +136,8 @@ namespace DependencyAnalyzer.Commands
 
         private void FillTpaList(string[] tpa, List<string> content, string suffix, string beginMark, string endMark)
         {
-            var head =  FindLineOfCode(content, beginMark) + 1;
-            var tail =  FindLineOfCode(content, endMark);
+            var head = FindLineOfCode(content, beginMark) + 1;
+            var tail = FindLineOfCode(content, endMark);
 
             bool toUpdate = true;
 
@@ -145,7 +145,7 @@ namespace DependencyAnalyzer.Commands
             // if so, skip updating.
             if (tpa.Length == tail - head - 1)
             {
-                var originalCount = tail-head-1;
+                var originalCount = tail - head - 1;
                 var originalItems = new string[originalCount];
                 content.CopyTo(head + 1, originalItems, 0, originalCount);
 

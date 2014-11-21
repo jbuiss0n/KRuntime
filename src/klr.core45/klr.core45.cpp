@@ -81,19 +81,19 @@ Finished:
 }
 
 bool KlrLoadLibraryExWAndGetProcAddress(
-    LPWSTR   pwszModuleFileName,
-    LPCSTR   pszFunctionName,
-    HMODULE* phModule,
-    FARPROC* ppFunction)
+            LPWSTR   pwszModuleFileName, 
+            LPCSTR   pszFunctionName, 
+            HMODULE* phModule, 
+            FARPROC* ppFunction)
 {
     bool fSuccess = true;
-    HMODULE hModule = nullptr;
+    HMODULE hModule = nullptr; 
     FARPROC pFunction = nullptr;
-
+    
     //Clear out params
     *phModule = nullptr;
     *(FARPROC*)ppFunction = nullptr;
-
+    
     //Load module and look for require DLL export
     hModule = ::LoadLibraryExW(pwszModuleFileName, NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (!hModule)
@@ -103,7 +103,7 @@ bool KlrLoadLibraryExWAndGetProcAddress(
         fSuccess = false;
         goto Finished;
     }
-
+    
     pFunction = ::GetProcAddress(hModule, pszFunctionName);
     if (!pFunction)
     {
@@ -138,8 +138,8 @@ HMODULE LoadCoreClr()
     TCHAR szKreTrace[1] = {};
     bool m_fVerboseTrace = GetEnvironmentVariableW(L"KRE_TRACE", szKreTrace, 1) > 0;
     LPWSTR rgwzOSLoaderModuleNames[] = {
-                        L"api-ms-win-core-libraryloader-l1-1-1.dll",
-                        L"kernel32.dll",
+                        L"api-ms-win-core-libraryloader-l1-1-1.dll", 
+                        L"kernel32.dll", 
                         NULL
     };
     LPWSTR rgwszModuleFileName = NULL;
@@ -180,23 +180,23 @@ HMODULE LoadCoreClr()
         while (rgwszModuleFileName != NULL)
         {
             fSuccess = KlrLoadLibraryExWAndGetProcAddress(
-                rgwszModuleFileName,
-                pszAddDllDirectoryName,
-                &hOSLoaderModule,
-                (FARPROC*)&pFnAddDllDirectory);
+                            rgwszModuleFileName, 
+                            pszAddDllDirectoryName, 
+                            &hOSLoaderModule, 
+                            (FARPROC*)&pFnAddDllDirectory);
             if (fSuccess)
                 break;
-
+            
             dwModuleFileName++;
             rgwszModuleFileName = rgwzOSLoaderModuleNames[dwModuleFileName];
-        }
-
+         }
+         
         if (!hOSLoaderModule || !pFnAddDllDirectory)
         {
             fSuccess = false;
             goto Finished;
         }
-
+         
         //Find the second DLL export
         pFnSetDefaultDllDirectories = (FnSetDefaultDllDirectories)::GetProcAddress(hOSLoaderModule, pszSetDefaultDllDirectoriesName);
         if (!pFnSetDefaultDllDirectories)
@@ -214,11 +214,11 @@ HMODULE LoadCoreClr()
             fSuccess = false;
             goto Finished;
         }
-
+        
         pFnAddDllDirectory(szCoreClrDirectory);
         // Modify the default dll flags so that dependencies can be found in this path
         pFnSetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS);
-
+        
         fSuccess = true;
 
         // Continue loading as usual
@@ -270,7 +270,7 @@ bool Win32KDisable()
     {
         goto Finished;
     }
-
+    
     if (wcscmp(szKreWin32KDisable, L"1") != 0)
     {
         fSuccess = false;
@@ -278,15 +278,15 @@ bool Win32KDisable()
     }
 
     fSuccess = KlrLoadLibraryExWAndGetProcAddress(
-        lpwszModuleFileName,
-        pszSetProcessMitigationPolicy,
-        &hProcessThreadsModule,
-        (FARPROC*)&pFnSetProcessMitigationPolicy);
+                    lpwszModuleFileName, 
+                    pszSetProcessMitigationPolicy, 
+                    &hProcessThreadsModule, 
+                    (FARPROC*)&pFnSetProcessMitigationPolicy);
     if (!fSuccess)
     {
         goto Finished;
     }
-
+    
     if (!hProcessThreadsModule || !pFnSetProcessMitigationPolicy)
     {
         fSuccess = false;
@@ -294,10 +294,10 @@ bool Win32KDisable()
     }
 
     if (pFnSetProcessMitigationPolicy(
-        ProcessSystemCallDisablePolicy,   //_In_  PROCESS_MITIGATION_POLICY MitigationPolicy,
-        &systemCallDisablePolicy,         //_In_  PVOID lpBuffer,
-        sizeof(systemCallDisablePolicy)  //_In_  SIZE_T dwLength
-        ))
+              ProcessSystemCallDisablePolicy,   //_In_  PROCESS_MITIGATION_POLICY MitigationPolicy,
+              &systemCallDisablePolicy,         //_In_  PVOID lpBuffer,
+              sizeof(systemCallDisablePolicy)  //_In_  SIZE_T dwLength
+            ))
     {
         printf_s("KRE_WIN32K_DISABLE successful.\n");
     }
@@ -308,7 +308,7 @@ Finished:
     {
         pFnSetProcessMitigationPolicy = nullptr;
     }
-
+    
     if (hProcessThreadsModule)
     {
         FreeLibrary(hProcessThreadsModule);
@@ -423,13 +423,13 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
     };
 
     cchTrustedPlatformAssemblies = TRUSTED_PLATFORM_ASSEMBLIES_STRING_BUFFER_SIZE_CCH;
-    pwszTrustedPlatformAssemblies = (LPWSTR)calloc(cchTrustedPlatformAssemblies + 1, sizeof(WCHAR));
+    pwszTrustedPlatformAssemblies = (LPWSTR)calloc(cchTrustedPlatformAssemblies+1, sizeof(WCHAR));
     if (pwszTrustedPlatformAssemblies == NULL)
     {
         goto Finished;
     }
     pwszTrustedPlatformAssemblies[0] = L'\0';
-
+    
     // Try native images first
     if (!GetTrustedPlatformAssembliesList(szCoreClrDirectory, true, pwszTrustedPlatformAssemblies, cchTrustedPlatformAssemblies))
     {
@@ -525,8 +525,8 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
     pCLRRuntimeHost->UnloadAppDomain(domainId, true);
 
     pCLRRuntimeHost->Stop();
-
-Finished:
+    
+Finished:    
     if (pwszTrustedPlatformAssemblies != NULL)
     {
         free(pwszTrustedPlatformAssemblies);

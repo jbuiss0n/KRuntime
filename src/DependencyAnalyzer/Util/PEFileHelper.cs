@@ -9,7 +9,7 @@ using System.Reflection.PortableExecutable;
 namespace DependencyAnalyzer.Util
 {
     public class PEFileHelper
-	{
+    {
         public static IList<string> GetReferences(string path)
         {
             var references = new List<string>();
@@ -30,5 +30,5 @@ namespace DependencyAnalyzer.Util
                 return references;
             }
         }
-	}
+    }
 }

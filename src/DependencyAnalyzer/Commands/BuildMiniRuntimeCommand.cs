@@ -24,7 +24,8 @@ namespace DependencyAnalyzer.Commands
             _environment = env;
 
             // TODO: Unhard coded this?
-            _runtimeProjects = new[] {
+            _runtimeProjects = new[]
+            {
                 "Microsoft.Framework.Runtime.Roslyn",
                 "Microsoft.Framework.ApplicationHost",
                 "klr.host",

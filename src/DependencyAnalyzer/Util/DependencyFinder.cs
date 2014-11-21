@@ -14,9 +14,9 @@ namespace DependencyAnalyzer.Util
     {
         private const string LibraryTypeProject = "Project";
 
-        private readonly string                _appbasePath;
-        private readonly string                _assemblyFolder;
-        private readonly ICache                _cache;
+        private readonly string _appbasePath;
+        private readonly string _assemblyFolder;
+        private readonly ICache _cache;
         private readonly ICacheContextAccessor _accessor;
 
         public DependencyFinder(ICacheContextAccessor cacheContextAccessor, ICache cache, IApplicationEnvironment environment, string assemblyFolder)
