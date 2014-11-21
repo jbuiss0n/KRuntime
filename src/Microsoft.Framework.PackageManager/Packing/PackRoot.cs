@@ -162,7 +162,7 @@ export SET KRE_APPBASE=""$DIR/{0}""
             }
         }
 
-        private static void MarkExecutable(string scriptPath)
+        private void MarkExecutable(string scriptPath)
         {
             var processStartInfo = new ProcessStartInfo()
             {
@@ -173,7 +173,10 @@ export SET KRE_APPBASE=""$DIR/{0}""
 
             var process = Process.Start(processStartInfo);
             process.WaitForExit();
-            // We don't check exit code. Ignore failure of chmod operation.
+            if (process.ExitCode != 0)
+            {
+                Reports.Error.WriteLine("Failed to mark {0} as executable".Yellow(), scriptPath);
+            }
         }
 
         private void WriteGlobalJson()
