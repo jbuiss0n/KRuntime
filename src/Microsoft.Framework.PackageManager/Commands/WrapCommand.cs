@@ -85,13 +85,11 @@ namespace Microsoft.Framework.PackageManager
                 return false;
             }
 
-            var rootDir = ProjectResolver.ResolveRootDirectory(Path.GetDirectoryName(CsProjectPath));
-
             var xDoc = XDocument.Parse(stdOut);
 
             foreach (var projectElement in xDoc.Root.Elements())
             {
-                EmitProjectWrapper(projectElement, rootDir);
+                EmitProjectWrapper(projectElement);
             }
 
             return true;
@@ -121,7 +119,7 @@ namespace Microsoft.Framework.PackageManager
             }
         }
 
-        private void EmitProjectWrapper(XElement projectElement, string rootDir)
+        private void EmitProjectWrapper(XElement projectElement)
         {
             var projectFile = Path.GetFullPath(projectElement.Attribute("projectFile").Value);
             if (!string.Equals("true", projectElement.Attribute("buildResult").Value))
@@ -130,12 +128,13 @@ namespace Microsoft.Framework.PackageManager
                 return;
             }
 
-            var outputAssemblyPath = GetOutputAssemblyPath(projectElement);
-
             // Name of the wrapper project is output assembly name, instead of .csproj file name
-            var wrapRoot = Path.Combine(rootDir, "wrap");
-            var projectDir = Path.GetDirectoryName(projectFile);
+            var outputAssemblyPath = GetOutputAssemblyPath(projectElement);
             var projectName = Path.GetFileNameWithoutExtension(outputAssemblyPath);
+
+            var projectDir = Path.GetDirectoryName(projectFile);
+            var rootDir = ProjectResolver.ResolveRootDirectory(projectDir);
+            var wrapRoot = Path.Combine(rootDir, "wrap");
             var projectResolver = new ProjectResolver(projectDir, rootDir);
             var targetProjectJson = LocateExistingProject(projectResolver, projectName);
             if (string.IsNullOrEmpty(targetProjectJson))
