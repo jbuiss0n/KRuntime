@@ -48,9 +48,7 @@ namespace DependencyAnalyzer.Util
 
             hostContext.DependencyWalker.Walk(hostContext.Project.Name, hostContext.Project.Version, framework);
 
-            var libManager = (ILibraryManager)hostContext.ServiceProvider.GetService(typeof(ILibraryManager));
-
-            foreach (var library in libManager.GetLibraries())
+            foreach (var library in hostContext.LibraryManager.GetLibraries())
             {
                 var isProject = string.Equals(LibraryTypeProject, library.Type, StringComparison.OrdinalIgnoreCase);
 
