@@ -496,8 +496,8 @@ extern "C" __declspec(dllexport) bool __stdcall CallApplicationMain(PCALL_APPLIC
 
     if (FAILED(hr))
     {
-        wprintf_s(L"TPA      %d %s\n", wcslen(pwszTrustedPlatformAssemblies), pwszTrustedPlatformAssemblies);
-        wprintf_s(L"AppPaths %s\n", wszAppPaths);
+        wprintf_s(L"TPA      %d %S\n", wcslen(pwszTrustedPlatformAssemblies), pwszTrustedPlatformAssemblies);
+        wprintf_s(L"AppPaths %S\n", wszAppPaths);
         printf_s("Failed to create app domain (%d).\n", hr);
         return false;
     }
