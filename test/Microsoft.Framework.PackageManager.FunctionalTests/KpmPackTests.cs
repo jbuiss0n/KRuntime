@@ -878,6 +878,7 @@ export SET KRE_APPBASE=""$DIR/approot/src/{0}""
         [MemberData("KreHomeDirs")]
         public void GenerateBatchFilesAndBashScriptsWithPackedRuntime(DisposableDir kreHomeDir)
         {
+            // Each KRE home only contains one KRE package, which is the one we are currently testing against
             var kreRoot = Directory.EnumerateDirectories(Path.Combine(kreHomeDir, "packages"), "KRE-*").First();
             var kreName = new DirectoryInfo(kreRoot).Name;
 
